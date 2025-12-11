@@ -83,7 +83,7 @@
   width: 100%;
   height: 160px;
   background: var(--bg-white);
-  border: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -318,6 +318,186 @@
   cursor: not-allowed;
 }
 
+/* ===== Admin Section ===== */
+.admin-section {
+  width: 100%;
+}
+
+.admin-box {
+  background: var(--bg-white);
+  border: 1px solid var(--border-color);
+  padding: 24px;
+}
+
+.admin-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-dark);
+  margin-bottom: 16px;
+}
+
+/* ===== Dashboard Stats ===== */
+.dashboard-stats {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.95rem;
+  color: var(--text-dark);
+  padding: 8px 16px;
+}
+
+.stats-divider {
+  color: var(--text-light);
+}
+
+/* ===== Inventory ===== */
+.inventory-grid {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.inventory-card {
+  border: 1px solid var(--border-color);
+  padding: 16px;
+  min-width: 180px;
+}
+
+.inventory-name {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--text-dark);
+  margin-bottom: 8px;
+}
+
+.inventory-stock-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.inventory-stock {
+  font-size: 0.9rem;
+  color: var(--text-dark);
+}
+
+.inventory-status {
+  font-size: 0.8rem;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.inventory-status.stock-normal {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.inventory-status.stock-warning {
+  background: #fef9c3;
+  color: #ca8a04;
+}
+
+.inventory-status.stock-danger {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.inventory-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.inventory-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  font-weight: 500;
+  background: transparent;
+  color: var(--primary-blue);
+  border: 1px solid var(--primary-blue);
+  transition: all 0.2s ease;
+}
+
+.inventory-btn:hover {
+  background: var(--primary-blue);
+  color: white;
+}
+
+/* ===== Orders List ===== */
+.orders-empty {
+  padding: 40px 0;
+  text-align: center;
+  color: var(--text-light);
+  font-size: 0.9rem;
+}
+
+.orders-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.order-item {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.order-item:last-child {
+  border-bottom: none;
+}
+
+.order-date {
+  font-size: 0.9rem;
+  color: var(--text-dark);
+  min-width: 120px;
+}
+
+.order-details {
+  flex: 1;
+  font-size: 0.9rem;
+  color: var(--text-dark);
+}
+
+.order-amount {
+  font-size: 0.9rem;
+  color: var(--text-dark);
+  min-width: 80px;
+  text-align: right;
+}
+
+.order-status-btn {
+  padding: 8px 16px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  background: transparent;
+  color: var(--primary-blue);
+  border: 1px solid var(--primary-blue);
+  transition: all 0.2s ease;
+  min-width: 90px;
+}
+
+.order-status-btn:hover:not(:disabled) {
+  background: var(--primary-blue);
+  color: white;
+}
+
+.order-status-btn.completed {
+  border-color: var(--border-color);
+  color: var(--text-light);
+  cursor: default;
+}
+
+.order-status-btn:disabled {
+  cursor: default;
+}
+
 /* ===== Responsive ===== */
 @media (max-width: 768px) {
   .header {
@@ -357,6 +537,33 @@
   
   .order-btn {
     width: 100%;
+  }
+  
+  .dashboard-stats {
+    flex-wrap: wrap;
+    padding: 8px 0;
+  }
+  
+  .inventory-grid {
+    flex-direction: column;
+  }
+  
+  .inventory-card {
+    min-width: 100%;
+  }
+  
+  .order-item {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  
+  .order-date {
+    min-width: auto;
+  }
+  
+  .order-details {
+    width: 100%;
+    order: 3;
   }
 }
 
