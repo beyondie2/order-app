@@ -1,110 +1,31 @@
-import { useState } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import './App.css'
 
-// 커피 메뉴 데이터
-const menuData = [
-  {
-    id: 1,
-    name: '아메리카노',
-    temperature: 'ICE',
-    price: 4000,
-    description: '간단한 설명...'
-  },
-  {
-    id: 2,
-    name: '아메리카노',
-    temperature: 'HOT',
-    price: 4000,
-    description: '간단한 설명...'
-  },
-  {
-    id: 3,
-    name: '카페라떼',
-    temperature: 'ICE',
-    price: 5000,
-    description: '간단한 설명...'
-  },
-  {
-    id: 4,
-    name: '카페라떼',
-    temperature: 'HOT',
-    price: 5000,
-    description: '간단한 설명...'
-  },
-  {
-    id: 5,
-    name: '바닐라라떼',
-    temperature: 'ICE',
-    price: 5500,
-    description: '간단한 설명...'
-  },
-  {
-    id: 6,
-    name: '카라멜마끼아또',
-    temperature: 'ICE',
-    price: 6000,
-    description: '간단한 설명...'
-  }
-]
+// Components
+import Header from './components/Header'
+import MenuCard from './components/MenuCard'
+import Cart from './components/Cart'
+import Toast from './components/Toast'
+import ConfirmModal from './components/ConfirmModal'
+import AdminDashboard from './components/AdminDashboard'
+import InventorySection from './components/InventorySection'
+import OrdersSection from './components/OrdersSection'
 
-// 옵션 데이터
-const optionsData = [
-  { id: 1, name: '샷 추가', price: 500 },
-  { id: 2, name: '시럽 추가', price: 0 }
-]
-
-// 초기 재고 데이터
-const initialInventory = [
-  { menuId: 1, menuName: '아메리카노 (ICE)', stock: 10 },
-  { menuId: 2, menuName: '아메리카노 (HOT)', stock: 10 },
-  { menuId: 3, menuName: '카페라떼', stock: 10 }
-]
-
-// 가격 포맷 함수
-const formatPrice = (price) => {
-  return price.toLocaleString('ko-KR') + '원'
-}
-
-// 날짜 포맷 함수
-const formatDate = (dateString) => {
-  const date = new Date(dateString)
-  const month = date.getMonth() + 1
-  const day = date.getDate()
-  const hours = String(date.getHours()).padStart(2, '0')
-  const minutes = String(date.getMinutes()).padStart(2, '0')
-  return `${month}월 ${day}일 ${hours}:${minutes}`
-}
-
-// 장바구니 아이템 키 생성
-const getCartItemKey = (menuId, options) => {
-  return `${menuId}-${options.sort().join(',')}`
-}
-
-// 재고 상태 확인 함수
-const getStockStatus = (stock) => {
-  if (stock === 0) return { text: '품절', className: 'stock-danger' }
-  if (stock < 5) return { text: '주의', className: 'stock-warning' }
-  return { text: '정상', className: 'stock-normal' }
-}
-
-// 주문 상태 정보
-const orderStatusInfo = {
-  pending: { text: '주문 접수', nextStatus: 'accepted', buttonText: '주문 접수' },
-  accepted: { text: '주문 접수됨', nextStatus: 'preparing', buttonText: '제조 시작' },
-  preparing: { text: '제조 중', nextStatus: 'completed', buttonText: '제조 완료' },
-  completed: { text: '제조 완료', nextStatus: null, buttonText: '완료' }
-}
+// Data & Utils
+import { menuData, optionsData, initialInventory } from './constants/menuData'
+import { getCartItemKey } from './utils/formatters'
 
 function App() {
-  const [currentPage, setCurrentPage] = useState('order') // 'order' or 'admin'
+  const [currentPage, setCurrentPage] = useState('order')
   const [cart, setCart] = useState([])
   const [selectedOptions, setSelectedOptions] = useState({})
-  const [toast, setToast] = useState(null)
+  const [toast, setToast] = useState({ message: null, isVisible: false })
   const [orders, setOrders] = useState([])
   const [inventory, setInventory] = useState(initialInventory)
+  const [showConfirmModal, setShowConfirmModal] = useState(false)
 
   // 옵션 선택 핸들러
-  const handleOptionChange = (menuId, optionName, checked) => {
+  const handleOptionChange = useCallback((menuId, optionName, checked) => {
     setSelectedOptions(prev => {
       const menuOptions = prev[menuId] || []
       if (checked) {
@@ -113,10 +34,27 @@ function App() {
         return { ...prev, [menuId]: menuOptions.filter(o => o !== optionName) }
       }
     })
-  }
+  }, [])
+
+  // 토스트 메시지 표시
+  const showToast = useCallback((message) => {
+    setToast({ message, isVisible: true })
+    setTimeout(() => {
+      setToast(prev => ({ ...prev, isVisible: false }))
+    }, 1800)
+    setTimeout(() => {
+      setToast({ message: null, isVisible: false })
+    }, 2200)
+  }, [])
 
   // 장바구니에 담기
-  const addToCart = (menu) => {
+  const addToCart = useCallback((menu) => {
+    const menuStock = inventory.find(item => item.menuId === menu.id)
+    if (menuStock && menuStock.stock === 0) {
+      showToast('품절된 상품입니다')
+      return
+    }
+
     const options = selectedOptions[menu.id] || []
     const optionPrice = options.reduce((sum, optName) => {
       const opt = optionsData.find(o => o.name === optName)
@@ -154,24 +92,52 @@ function App() {
 
     setSelectedOptions(prev => ({ ...prev, [menu.id]: [] }))
     showToast(`${menuName} 담기 완료!`)
-  }
+  }, [selectedOptions, inventory, showToast])
 
-  // 토스트 메시지 표시
-  const showToast = (message) => {
-    setToast(message)
-    setTimeout(() => setToast(null), 2000)
-  }
+  // 장바구니 아이템 삭제
+  const removeFromCart = useCallback((index) => {
+    setCart(prev => prev.filter((_, i) => i !== index))
+  }, [])
+
+  // 장바구니 수량 업데이트
+  const updateQuantity = useCallback((index, newQuantity) => {
+    if (newQuantity < 1) {
+      removeFromCart(index)
+      return
+    }
+    setCart(prev => prev.map((item, i) => {
+      if (i === index) {
+        return {
+          ...item,
+          quantity: newQuantity,
+          totalPrice: newQuantity * item.unitPrice
+        }
+      }
+      return item
+    }))
+  }, [removeFromCart])
 
   // 총 금액 계산
-  const totalAmount = cart.reduce((sum, item) => sum + item.totalPrice, 0)
+  const totalAmount = useMemo(() => 
+    cart.reduce((sum, item) => sum + item.totalPrice, 0)
+  , [cart])
+
+  // 주문 확인 모달 열기
+  const handleOrderClick = useCallback(() => {
+    if (cart.length === 0) return
+    setShowConfirmModal(true)
+  }, [cart.length])
 
   // 주문하기
-  const handleOrder = () => {
+  const handleOrder = useCallback(() => {
     if (cart.length === 0) return
     
+    const orderId = crypto.randomUUID()
+    const orderDate = new Date().toISOString()
+    
     const newOrder = {
-      id: Date.now(),
-      orderDate: new Date().toISOString(),
+      id: orderId,
+      orderDate,
       items: cart.map(item => ({
         menuId: item.menuId,
         menuName: item.menuName,
@@ -184,69 +150,75 @@ function App() {
       status: 'pending'
     }
     
+    // 재고 차감
+    setInventory(prev => {
+      const newInventory = [...prev]
+      cart.forEach(cartItem => {
+        const inventoryIndex = newInventory.findIndex(inv => inv.menuId === cartItem.menuId)
+        if (inventoryIndex >= 0) {
+          newInventory[inventoryIndex] = {
+            ...newInventory[inventoryIndex],
+            stock: Math.max(0, newInventory[inventoryIndex].stock - cartItem.quantity)
+          }
+        }
+      })
+      return newInventory
+    })
+    
     setOrders(prev => [newOrder, ...prev])
     showToast('주문이 완료되었습니다!')
     setCart([])
-  }
+    setShowConfirmModal(false)
+  }, [cart, totalAmount, showToast])
 
   // 주문 상태 변경
-  const handleStatusChange = (orderId) => {
+  const handleStatusChange = useCallback((orderId) => {
+    const statusFlow = {
+      pending: 'accepted',
+      accepted: 'preparing',
+      preparing: 'completed'
+    }
+    
     setOrders(prev => prev.map(order => {
-      if (order.id === orderId) {
-        const currentStatus = order.status
-        const nextStatus = orderStatusInfo[currentStatus].nextStatus
-        if (nextStatus) {
-          return { ...order, status: nextStatus }
-        }
+      if (order.id === orderId && statusFlow[order.status]) {
+        return { ...order, status: statusFlow[order.status] }
       }
       return order
     }))
-  }
+  }, [])
 
   // 재고 증가
-  const increaseStock = (menuId) => {
+  const increaseStock = useCallback((menuId) => {
     setInventory(prev => prev.map(item => 
       item.menuId === menuId ? { ...item, stock: item.stock + 1 } : item
     ))
-  }
+  }, [])
 
   // 재고 감소
-  const decreaseStock = (menuId) => {
+  const decreaseStock = useCallback((menuId) => {
     setInventory(prev => prev.map(item => 
       item.menuId === menuId ? { ...item, stock: Math.max(0, item.stock - 1) } : item
     ))
-  }
+  }, [])
+
+  // 재고 조회 함수
+  const getStock = useCallback((menuId) => {
+    const item = inventory.find(inv => inv.menuId === menuId)
+    return item ? item.stock : 0
+  }, [inventory])
 
   // 대시보드 통계
-  const dashboardStats = {
+  const dashboardStats = useMemo(() => ({
     totalOrders: orders.length,
     acceptedOrders: orders.filter(o => o.status === 'accepted').length,
     preparingOrders: orders.filter(o => o.status === 'preparing').length,
     completedOrders: orders.filter(o => o.status === 'completed').length
-  }
+  }), [orders])
 
   return (
     <div className="app">
-      {/* Header */}
-      <header className="header">
-        <div className="logo">COZY</div>
-        <nav className="nav">
-          <button 
-            className={`nav-btn ${currentPage === 'order' ? 'active' : ''}`}
-            onClick={() => setCurrentPage('order')}
-          >
-            주문하기
-          </button>
-          <button 
-            className={`nav-btn ${currentPage === 'admin' ? 'active' : ''}`}
-            onClick={() => setCurrentPage('admin')}
-          >
-            관리자
-          </button>
-        </nav>
-      </header>
+      <Header currentPage={currentPage} setCurrentPage={setCurrentPage} />
 
-      {/* Main Content */}
       <main className="main-container">
         {currentPage === 'order' ? (
           <>
@@ -255,181 +227,54 @@ function App() {
               <h2 className="section-title">메뉴</h2>
               <div className="menu-grid">
                 {menuData.map(menu => (
-                  <div key={menu.id} className="menu-card">
-                    <div className="menu-image"></div>
-                    <div className="menu-content">
-                      <h3 className="menu-name">{menu.name}({menu.temperature})</h3>
-                      <p className="menu-price">{formatPrice(menu.price)}</p>
-                      <p className="menu-description">{menu.description}</p>
-                      
-                      <div className="options-container">
-                        {optionsData.map(option => (
-                          <div key={option.id} className="option-item">
-                            <label>
-                              <input
-                                type="checkbox"
-                                checked={(selectedOptions[menu.id] || []).includes(option.name)}
-                                onChange={(e) => handleOptionChange(menu.id, option.name, e.target.checked)}
-                              />
-                              {option.name} ({option.price > 0 ? `+${formatPrice(option.price)}` : '+0원'})
-                            </label>
-                          </div>
-                        ))}
-                      </div>
-                      
-                      <button 
-                        className="add-btn"
-                        onClick={() => addToCart(menu)}
-                      >
-                        담기
-                      </button>
-                    </div>
-                  </div>
+                  <MenuCard
+                    key={menu.id}
+                    menu={menu}
+                    selectedOptions={selectedOptions}
+                    onOptionChange={handleOptionChange}
+                    onAddToCart={addToCart}
+                    stock={getStock(menu.id)}
+                  />
                 ))}
               </div>
             </section>
 
             {/* Order Page - Cart Section */}
-            <section className="cart-section">
-              <div className="cart-container">
-                <div className="cart-left">
-                  <h2 className="cart-title">장바구니</h2>
-                  
-                  {cart.length === 0 ? (
-                    <div className="cart-empty">
-                      장바구니가 비어있습니다
-                    </div>
-                  ) : (
-                    <div className="cart-items">
-                      {cart.map((item, index) => (
-                        <div key={index} className="cart-item">
-                          <div className="cart-item-info">
-                            <span className="cart-item-name">{item.menuName}</span>
-                            {item.options.length > 0 && (
-                              <span className="cart-item-options">
-                                ({item.options.join(', ')})
-                              </span>
-                            )}
-                            <span className="cart-item-quantity">X {item.quantity}</span>
-                          </div>
-                          <div className="cart-item-price">{formatPrice(item.totalPrice)}</div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                
-                <div className="cart-right">
-                  <div className="cart-total">
-                    <span className="total-label">총 금액</span>
-                    <span className="total-amount">{formatPrice(totalAmount)}</span>
-                  </div>
-                  
-                  <button 
-                    className="order-btn"
-                    onClick={handleOrder}
-                    disabled={cart.length === 0}
-                  >
-                    주문하기
-                  </button>
-                </div>
-              </div>
-            </section>
+            <Cart
+              cart={cart}
+              totalAmount={totalAmount}
+              onOrder={handleOrderClick}
+              onRemoveItem={removeFromCart}
+              onUpdateQuantity={updateQuantity}
+            />
           </>
         ) : (
           <>
-            {/* Admin Page - Dashboard */}
-            <section className="admin-section">
-              <div className="admin-box">
-                <h2 className="admin-title">관리자 대시보드</h2>
-                <div className="dashboard-stats">
-                  <span>총 주문 {dashboardStats.totalOrders}</span>
-                  <span className="stats-divider">/</span>
-                  <span>주문 접수 {dashboardStats.acceptedOrders}</span>
-                  <span className="stats-divider">/</span>
-                  <span>제조 중 {dashboardStats.preparingOrders}</span>
-                  <span className="stats-divider">/</span>
-                  <span>제조 완료 {dashboardStats.completedOrders}</span>
-                </div>
-              </div>
-            </section>
-
-            {/* Admin Page - Inventory */}
-            <section className="admin-section">
-              <div className="admin-box">
-                <h2 className="admin-title">재고 현황</h2>
-                <div className="inventory-grid">
-                  {inventory.map(item => {
-                    const stockStatus = getStockStatus(item.stock)
-                    return (
-                      <div key={item.menuId} className="inventory-card">
-                        <div className="inventory-name">{item.menuName}</div>
-                        <div className="inventory-stock-row">
-                          <span className="inventory-stock">{item.stock}개</span>
-                          <span className={`inventory-status ${stockStatus.className}`}>
-                            {stockStatus.text}
-                          </span>
-                        </div>
-                        <div className="inventory-buttons">
-                          <button 
-                            className="inventory-btn"
-                            onClick={() => increaseStock(item.menuId)}
-                          >
-                            +
-                          </button>
-                          <button 
-                            className="inventory-btn"
-                            onClick={() => decreaseStock(item.menuId)}
-                          >
-                            -
-                          </button>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            </section>
-
-            {/* Admin Page - Orders */}
-            <section className="admin-section">
-              <div className="admin-box">
-                <h2 className="admin-title">주문 현황</h2>
-                {orders.length === 0 ? (
-                  <div className="orders-empty">접수된 주문이 없습니다</div>
-                ) : (
-                  <div className="orders-list">
-                    {orders.map(order => (
-                      <div key={order.id} className="order-item">
-                        <div className="order-date">{formatDate(order.orderDate)}</div>
-                        <div className="order-details">
-                          {order.items.map((item, idx) => (
-                            <span key={idx}>
-                              {item.menuName} x {item.quantity}
-                              {idx < order.items.length - 1 ? ', ' : ''}
-                            </span>
-                          ))}
-                        </div>
-                        <div className="order-amount">{formatPrice(order.totalAmount)}</div>
-                        <button 
-                          className={`order-status-btn ${order.status === 'completed' ? 'completed' : ''}`}
-                          onClick={() => handleStatusChange(order.id)}
-                          disabled={order.status === 'completed'}
-                        >
-                          {orderStatusInfo[order.status].buttonText}
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </section>
+            <AdminDashboard stats={dashboardStats} />
+            <InventorySection 
+              inventory={inventory} 
+              onIncrease={increaseStock} 
+              onDecrease={decreaseStock} 
+            />
+            <OrdersSection 
+              orders={orders} 
+              onStatusChange={handleStatusChange} 
+            />
           </>
         )}
       </main>
 
       {/* Toast */}
-      {toast && <div className="toast">{toast}</div>}
+      <Toast message={toast.message} isVisible={toast.isVisible} />
+
+      {/* Confirm Modal */}
+      <ConfirmModal
+        isOpen={showConfirmModal}
+        cart={cart}
+        totalAmount={totalAmount}
+        onConfirm={handleOrder}
+        onCancel={() => setShowConfirmModal(false)}
+      />
     </div>
   )
 }
