@@ -321,3 +321,611 @@
   "status": "accepted"
 }
 ```
+
+---
+
+## 5. 백엔드 설계
+
+### 5.1 데이터 모델
+
+#### 5.1.1 Menus (메뉴)
+
+| 필드명 | 타입 | 설명 | 제약조건 |
+|--------|------|------|----------|
+| id | SERIAL | 메뉴 고유 ID | PRIMARY KEY |
+| name | VARCHAR(100) | 커피 이름 | NOT NULL |
+| temperature | VARCHAR(10) | 온도 (ICE/HOT) | NOT NULL |
+| description | TEXT | 메뉴 설명 | |
+| price | INTEGER | 가격 (원) | NOT NULL, DEFAULT 0 |
+| image_url | VARCHAR(255) | 이미지 URL | |
+| stock | INTEGER | 재고 수량 | NOT NULL, DEFAULT 0 |
+| created_at | TIMESTAMP | 생성일시 | DEFAULT NOW() |
+| updated_at | TIMESTAMP | 수정일시 | DEFAULT NOW() |
+
+**DDL:**
+```sql
+CREATE TABLE menus (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    temperature VARCHAR(10) NOT NULL,
+    description TEXT,
+    price INTEGER NOT NULL DEFAULT 0,
+    image_url VARCHAR(255),
+    stock INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+**초기 데이터:**
+```sql
+INSERT INTO menus (name, temperature, description, price, stock) VALUES
+('아메리카노', 'ICE', '깔끔한 에스프레소와 시원한 얼음의 조화', 4000, 10),
+('아메리카노', 'HOT', '진한 에스프레소의 풍부한 향', 4000, 10),
+('카페라떼', 'ICE', '부드러운 우유와 에스프레소의 만남', 5000, 10),
+('카페라떼', 'HOT', '따뜻한 우유 거품 위 에스프레소', 5000, 10),
+('바닐라라떼', 'ICE', '달콤한 바닐라 시럽이 들어간 라떼', 5500, 10),
+('카라멜마끼아또', 'ICE', '달콤한 카라멜 드리즐이 올라간 라떼', 6000, 10);
+```
+
+#### 5.1.2 Options (옵션)
+
+| 필드명 | 타입 | 설명 | 제약조건 |
+|--------|------|------|----------|
+| id | SERIAL | 옵션 고유 ID | PRIMARY KEY |
+| name | VARCHAR(50) | 옵션 이름 | NOT NULL |
+| price | INTEGER | 추가 가격 (원) | NOT NULL, DEFAULT 0 |
+| created_at | TIMESTAMP | 생성일시 | DEFAULT NOW() |
+
+**DDL:**
+```sql
+CREATE TABLE options (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(50) NOT NULL,
+    price INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+**초기 데이터:**
+```sql
+INSERT INTO options (name, price) VALUES
+('샷 추가', 500),
+('시럽 추가', 0);
+```
+
+#### 5.1.3 Orders (주문)
+
+| 필드명 | 타입 | 설명 | 제약조건 |
+|--------|------|------|----------|
+| id | SERIAL | 주문 고유 ID | PRIMARY KEY |
+| order_date | TIMESTAMP | 주문 일시 | NOT NULL, DEFAULT NOW() |
+| total_amount | INTEGER | 총 주문 금액 | NOT NULL |
+| status | VARCHAR(20) | 주문 상태 | NOT NULL, DEFAULT 'pending' |
+| created_at | TIMESTAMP | 생성일시 | DEFAULT NOW() |
+| updated_at | TIMESTAMP | 수정일시 | DEFAULT NOW() |
+
+**주문 상태 값:**
+- `pending`: 신규 주문 (접수 대기)
+- `accepted`: 주문 접수됨
+- `preparing`: 제조 중
+- `completed`: 제조 완료
+
+**DDL:**
+```sql
+CREATE TABLE orders (
+    id SERIAL PRIMARY KEY,
+    order_date TIMESTAMP NOT NULL DEFAULT NOW(),
+    total_amount INTEGER NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'pending',
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+#### 5.1.4 Order_Items (주문 상세)
+
+| 필드명 | 타입 | 설명 | 제약조건 |
+|--------|------|------|----------|
+| id | SERIAL | 주문 상세 고유 ID | PRIMARY KEY |
+| order_id | INTEGER | 주문 ID | FOREIGN KEY → orders(id) |
+| menu_id | INTEGER | 메뉴 ID | FOREIGN KEY → menus(id) |
+| menu_name | VARCHAR(100) | 주문 시점 메뉴명 | NOT NULL |
+| quantity | INTEGER | 수량 | NOT NULL, DEFAULT 1 |
+| unit_price | INTEGER | 단가 (옵션 포함) | NOT NULL |
+| total_price | INTEGER | 소계 (단가 × 수량) | NOT NULL |
+| options | TEXT | 선택한 옵션 (JSON) | |
+
+**DDL:**
+```sql
+CREATE TABLE order_items (
+    id SERIAL PRIMARY KEY,
+    order_id INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+    menu_id INTEGER NOT NULL REFERENCES menus(id),
+    menu_name VARCHAR(100) NOT NULL,
+    quantity INTEGER NOT NULL DEFAULT 1,
+    unit_price INTEGER NOT NULL,
+    total_price INTEGER NOT NULL,
+    options TEXT
+);
+```
+
+#### 5.1.5 ERD (Entity Relationship Diagram)
+
+```
+┌─────────────┐       ┌─────────────┐       ┌─────────────┐
+│   menus     │       │   orders    │       │   options   │
+├─────────────┤       ├─────────────┤       ├─────────────┤
+│ id (PK)     │       │ id (PK)     │       │ id (PK)     │
+│ name        │       │ order_date  │       │ name        │
+│ temperature │       │ total_amount│       │ price       │
+│ description │       │ status      │       │ created_at  │
+│ price       │       │ created_at  │       └─────────────┘
+│ image_url   │       │ updated_at  │
+│ stock       │       └──────┬──────┘
+│ created_at  │              │
+│ updated_at  │              │ 1:N
+└──────┬──────┘              │
+       │                     │
+       │ 1:N    ┌────────────┴────────────┐
+       │        │      order_items        │
+       └────────┤─────────────────────────┤
+                │ id (PK)                 │
+                │ order_id (FK → orders)  │
+                │ menu_id (FK → menus)    │
+                │ menu_name               │
+                │ quantity                │
+                │ unit_price              │
+                │ total_price             │
+                │ options                 │
+                └─────────────────────────┘
+```
+
+---
+
+### 5.2 사용자 흐름 (User Flow)
+
+#### 5.2.1 주문하기 화면 흐름
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  1. 화면 로드                                                    │
+│     └─→ GET /api/menus 호출                                     │
+│         └─→ Menus 테이블에서 메뉴 목록 조회                        │
+│             └─→ 메뉴 카드로 화면에 표시 (재고 0인 메뉴는 '품절' 표시)  │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│  2. 메뉴 선택                                                    │
+│     └─→ 사용자가 옵션 선택 후 '담기' 클릭                          │
+│         └─→ 프론트엔드 장바구니(state)에 추가                       │
+│             └─→ 장바구니 UI 실시간 업데이트                        │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│  3. 주문하기                                                     │
+│     └─→ '주문하기' 버튼 클릭                                      │
+│         └─→ POST /api/orders 호출 (주문 정보 전송)                 │
+│             └─→ Orders 테이블에 주문 저장                         │
+│             └─→ Order_Items 테이블에 주문 상세 저장                 │
+│             └─→ Menus 테이블의 재고 차감 (stock - quantity)        │
+│             └─→ 주문 완료 메시지 표시                              │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### 5.2.2 관리자 화면 흐름
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  1. 화면 로드                                                    │
+│     └─→ GET /api/menus 호출 (재고 현황)                          │
+│     └─→ GET /api/orders 호출 (주문 현황)                         │
+│         └─→ 대시보드 통계, 재고 현황, 주문 목록 표시                 │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│  2. 재고 관리                                                    │
+│     └─→ +/- 버튼 클릭                                            │
+│         └─→ PATCH /api/menus/:id/stock 호출                     │
+│             └─→ Menus 테이블의 재고 수량 업데이트                   │
+│             └─→ 재고 현황 UI 업데이트                              │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│  3. 주문 상태 관리                                                │
+│     └─→ 상태 버튼 클릭 (주문 접수 → 제조 시작 → 제조 완료)           │
+│         └─→ PATCH /api/orders/:id/status 호출                   │
+│             └─→ Orders 테이블의 status 업데이트                    │
+│             └─→ 주문 현황 및 대시보드 통계 UI 업데이트               │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### 5.3 API 설계
+
+#### 5.3.1 API 개요
+
+| 기능 | Method | Endpoint | 설명 |
+|------|--------|----------|------|
+| 메뉴 목록 조회 | GET | /api/menus | 모든 메뉴 목록 조회 |
+| 옵션 목록 조회 | GET | /api/options | 모든 옵션 목록 조회 |
+| 재고 수정 | PATCH | /api/menus/:id/stock | 특정 메뉴의 재고 수량 수정 |
+| 주문 생성 | POST | /api/orders | 새 주문 생성 |
+| 주문 목록 조회 | GET | /api/orders | 모든 주문 목록 조회 |
+| 주문 상세 조회 | GET | /api/orders/:id | 특정 주문 상세 조회 |
+| 주문 상태 변경 | PATCH | /api/orders/:id/status | 특정 주문의 상태 변경 |
+
+---
+
+#### 5.3.2 메뉴 관련 API
+
+##### GET /api/menus
+
+**설명:** 모든 메뉴 목록을 조회합니다.
+
+**Request:**
+```
+GET /api/menus
+```
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": 1,
+      "name": "아메리카노",
+      "temperature": "ICE",
+      "description": "깔끔한 에스프레소와 시원한 얼음의 조화",
+      "price": 4000,
+      "imageUrl": null,
+      "stock": 10
+    },
+    {
+      "id": 2,
+      "name": "아메리카노",
+      "temperature": "HOT",
+      "description": "진한 에스프레소의 풍부한 향",
+      "price": 4000,
+      "imageUrl": null,
+      "stock": 10
+    }
+  ]
+}
+```
+
+---
+
+##### PATCH /api/menus/:id/stock
+
+**설명:** 특정 메뉴의 재고 수량을 수정합니다.
+
+**Request:**
+```
+PATCH /api/menus/1/stock
+Content-Type: application/json
+
+{
+  "stock": 15
+}
+```
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "name": "아메리카노",
+    "temperature": "ICE",
+    "stock": 15
+  }
+}
+```
+
+**Error Response (404 Not Found):**
+```json
+{
+  "success": false,
+  "error": "메뉴를 찾을 수 없습니다."
+}
+```
+
+---
+
+#### 5.3.3 옵션 관련 API
+
+##### GET /api/options
+
+**설명:** 모든 옵션 목록을 조회합니다.
+
+**Request:**
+```
+GET /api/options
+```
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": 1,
+      "name": "샷 추가",
+      "price": 500
+    },
+    {
+      "id": 2,
+      "name": "시럽 추가",
+      "price": 0
+    }
+  ]
+}
+```
+
+---
+
+#### 5.3.4 주문 관련 API
+
+##### POST /api/orders
+
+**설명:** 새 주문을 생성하고, 주문한 메뉴의 재고를 차감합니다.
+
+**Request:**
+```
+POST /api/orders
+Content-Type: application/json
+
+{
+  "items": [
+    {
+      "menuId": 1,
+      "menuName": "아메리카노(ICE)",
+      "options": ["샷 추가"],
+      "quantity": 2,
+      "unitPrice": 4500,
+      "totalPrice": 9000
+    },
+    {
+      "menuId": 3,
+      "menuName": "카페라떼(ICE)",
+      "options": [],
+      "quantity": 1,
+      "unitPrice": 5000,
+      "totalPrice": 5000
+    }
+  ],
+  "totalAmount": 14000
+}
+```
+
+**Response (201 Created):**
+```json
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "orderDate": "2024-12-12T14:30:00.000Z",
+    "items": [
+      {
+        "menuId": 1,
+        "menuName": "아메리카노(ICE)",
+        "options": ["샷 추가"],
+        "quantity": 2,
+        "unitPrice": 4500,
+        "totalPrice": 9000
+      },
+      {
+        "menuId": 3,
+        "menuName": "카페라떼(ICE)",
+        "options": [],
+        "quantity": 1,
+        "unitPrice": 5000,
+        "totalPrice": 5000
+      }
+    ],
+    "totalAmount": 14000,
+    "status": "pending"
+  }
+}
+```
+
+**Error Response (400 Bad Request):**
+```json
+{
+  "success": false,
+  "error": "재고가 부족합니다.",
+  "details": {
+    "menuId": 1,
+    "menuName": "아메리카노(ICE)",
+    "requested": 5,
+    "available": 3
+  }
+}
+```
+
+---
+
+##### GET /api/orders
+
+**설명:** 모든 주문 목록을 조회합니다 (최신순 정렬).
+
+**Request:**
+```
+GET /api/orders
+```
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": 2,
+      "orderDate": "2024-12-12T15:00:00.000Z",
+      "items": [
+        {
+          "menuId": 2,
+          "menuName": "아메리카노(HOT)",
+          "options": [],
+          "quantity": 1,
+          "unitPrice": 4000,
+          "totalPrice": 4000
+        }
+      ],
+      "totalAmount": 4000,
+      "status": "preparing"
+    },
+    {
+      "id": 1,
+      "orderDate": "2024-12-12T14:30:00.000Z",
+      "items": [
+        {
+          "menuId": 1,
+          "menuName": "아메리카노(ICE)",
+          "options": ["샷 추가"],
+          "quantity": 2,
+          "unitPrice": 4500,
+          "totalPrice": 9000
+        }
+      ],
+      "totalAmount": 9000,
+      "status": "completed"
+    }
+  ],
+  "stats": {
+    "totalOrders": 2,
+    "pendingOrders": 0,
+    "acceptedOrders": 0,
+    "preparingOrders": 1,
+    "completedOrders": 1
+  }
+}
+```
+
+---
+
+##### GET /api/orders/:id
+
+**설명:** 특정 주문의 상세 정보를 조회합니다.
+
+**Request:**
+```
+GET /api/orders/1
+```
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "orderDate": "2024-12-12T14:30:00.000Z",
+    "items": [
+      {
+        "menuId": 1,
+        "menuName": "아메리카노(ICE)",
+        "options": ["샷 추가"],
+        "quantity": 2,
+        "unitPrice": 4500,
+        "totalPrice": 9000
+      }
+    ],
+    "totalAmount": 9000,
+    "status": "completed"
+  }
+}
+```
+
+**Error Response (404 Not Found):**
+```json
+{
+  "success": false,
+  "error": "주문을 찾을 수 없습니다."
+}
+```
+
+---
+
+##### PATCH /api/orders/:id/status
+
+**설명:** 특정 주문의 상태를 변경합니다.
+
+**상태 흐름:** `pending` → `accepted` → `preparing` → `completed`
+
+**Request:**
+```
+PATCH /api/orders/1/status
+Content-Type: application/json
+
+{
+  "status": "accepted"
+}
+```
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "status": "accepted",
+    "updatedAt": "2024-12-12T14:35:00.000Z"
+  }
+}
+```
+
+**Error Response (400 Bad Request):**
+```json
+{
+  "success": false,
+  "error": "유효하지 않은 상태 값입니다."
+}
+```
+
+---
+
+### 5.4 프로젝트 구조
+
+```
+order-app/
+├── docs/
+│   └── PRD.md
+├── ui/                          # 프론트엔드 (React + Vite)
+│   ├── src/
+│   │   ├── components/
+│   │   ├── constants/
+│   │   ├── utils/
+│   │   ├── App.jsx
+│   │   └── main.jsx
+│   └── package.json
+└── api/                         # 백엔드 (Node.js + Express)
+    ├── src/
+    │   ├── routes/
+    │   │   ├── menus.js         # 메뉴 라우트
+    │   │   ├── options.js       # 옵션 라우트
+    │   │   └── orders.js        # 주문 라우트
+    │   ├── db/
+    │   │   ├── index.js         # DB 연결 설정
+    │   │   └── init.sql         # 테이블 생성 및 초기 데이터
+    │   └── app.js               # Express 앱 설정
+    ├── .env                     # 환경 변수 (DB 연결 정보)
+    └── package.json
+```
+
+---
+
+### 5.5 환경 변수
+
+```env
+# .env
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=coffee_order
+DB_USER=postgres
+DB_PASSWORD=your_password
+
+PORT=3000
+```

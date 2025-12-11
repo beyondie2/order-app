@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useEffect } from 'react'
 import './App.css'
 
 // Components
@@ -11,8 +11,10 @@ import AdminDashboard from './components/AdminDashboard'
 import InventorySection from './components/InventorySection'
 import OrdersSection from './components/OrdersSection'
 
-// Data & Utils
-import { menuData, optionsData, initialInventory } from './constants/menuData'
+// API Services
+import * as api from './services/api'
+
+// Utils
 import { getCartItemKey } from './utils/formatters'
 
 function App() {
@@ -20,9 +22,73 @@ function App() {
   const [cart, setCart] = useState([])
   const [selectedOptions, setSelectedOptions] = useState({})
   const [toast, setToast] = useState({ message: null, isVisible: false })
+  
+  // API에서 가져오는 데이터
+  const [menus, setMenus] = useState([])
+  const [options, setOptions] = useState([])
   const [orders, setOrders] = useState([])
-  const [inventory, setInventory] = useState(initialInventory)
+  const [dashboardStats, setDashboardStats] = useState({
+    totalOrders: 0,
+    pendingOrders: 0,
+    acceptedOrders: 0,
+    preparingOrders: 0,
+    completedOrders: 0
+  })
+  
+  const [loading, setLoading] = useState(true)
   const [showConfirmModal, setShowConfirmModal] = useState(false)
+
+  // 토스트 메시지 표시
+  const showToast = useCallback((message) => {
+    setToast({ message, isVisible: true })
+    setTimeout(() => {
+      setToast(prev => ({ ...prev, isVisible: false }))
+    }, 1800)
+    setTimeout(() => {
+      setToast({ message: null, isVisible: false })
+    }, 2200)
+  }, [])
+
+  // 초기 데이터 로드
+  const loadInitialData = useCallback(async () => {
+    try {
+      setLoading(true)
+      const [menusData, optionsData] = await Promise.all([
+        api.getMenus(),
+        api.getOptions()
+      ])
+      setMenus(menusData)
+      setOptions(optionsData)
+    } catch (error) {
+      console.error('데이터 로드 실패:', error)
+      showToast('데이터를 불러오는데 실패했습니다.')
+    } finally {
+      setLoading(false)
+    }
+  }, [showToast])
+
+  // 주문 목록 로드
+  const loadOrders = useCallback(async () => {
+    try {
+      const { orders: ordersData, stats } = await api.getOrders()
+      setOrders(ordersData)
+      setDashboardStats(stats)
+    } catch (error) {
+      console.error('주문 목록 로드 실패:', error)
+    }
+  }, [])
+
+  // 초기 로드
+  useEffect(() => {
+    loadInitialData()
+  }, [loadInitialData])
+
+  // 관리자 페이지 진입 시 주문 목록 로드
+  useEffect(() => {
+    if (currentPage === 'admin') {
+      loadOrders()
+    }
+  }, [currentPage, loadOrders])
 
   // 옵션 선택 핸들러
   const handleOptionChange = useCallback((menuId, optionName, checked) => {
@@ -36,33 +102,21 @@ function App() {
     })
   }, [])
 
-  // 토스트 메시지 표시
-  const showToast = useCallback((message) => {
-    setToast({ message, isVisible: true })
-    setTimeout(() => {
-      setToast(prev => ({ ...prev, isVisible: false }))
-    }, 1800)
-    setTimeout(() => {
-      setToast({ message: null, isVisible: false })
-    }, 2200)
-  }, [])
-
   // 장바구니에 담기
   const addToCart = useCallback((menu) => {
-    const menuStock = inventory.find(item => item.menuId === menu.id)
-    if (menuStock && menuStock.stock === 0) {
+    if (menu.stock === 0) {
       showToast('품절된 상품입니다')
       return
     }
 
-    const options = selectedOptions[menu.id] || []
-    const optionPrice = options.reduce((sum, optName) => {
-      const opt = optionsData.find(o => o.name === optName)
+    const menuOptions = selectedOptions[menu.id] || []
+    const optionPrice = menuOptions.reduce((sum, optName) => {
+      const opt = options.find(o => o.name === optName)
       return sum + (opt ? opt.price : 0)
     }, 0)
     
     const unitPrice = menu.price + optionPrice
-    const itemKey = getCartItemKey(menu.id, options)
+    const itemKey = getCartItemKey(menu.id, menuOptions)
     const menuName = `${menu.name}(${menu.temperature})`
 
     setCart(prev => {
@@ -82,7 +136,7 @@ function App() {
         return [...prev, {
           menuId: menu.id,
           menuName,
-          options: [...options],
+          options: [...menuOptions],
           quantity: 1,
           unitPrice,
           totalPrice: unitPrice
@@ -92,7 +146,7 @@ function App() {
 
     setSelectedOptions(prev => ({ ...prev, [menu.id]: [] }))
     showToast(`${menuName} 담기 완료!`)
-  }, [selectedOptions, inventory, showToast])
+  }, [selectedOptions, options, showToast])
 
   // 장바구니 아이템 삭제
   const removeFromCart = useCallback((index) => {
@@ -128,92 +182,123 @@ function App() {
     setShowConfirmModal(true)
   }, [cart.length])
 
-  // 주문하기
-  const handleOrder = useCallback(() => {
+  // 주문하기 (API 호출)
+  const handleOrder = useCallback(async () => {
     if (cart.length === 0) return
     
-    const orderId = crypto.randomUUID()
-    const orderDate = new Date().toISOString()
-    
-    const newOrder = {
-      id: orderId,
-      orderDate,
-      items: cart.map(item => ({
-        menuId: item.menuId,
-        menuName: item.menuName,
-        options: item.options,
-        quantity: item.quantity,
-        unitPrice: item.unitPrice,
-        totalPrice: item.totalPrice
-      })),
-      totalAmount,
-      status: 'pending'
+    try {
+      const orderData = {
+        items: cart.map(item => ({
+          menuId: item.menuId,
+          menuName: item.menuName,
+          options: item.options,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          totalPrice: item.totalPrice
+        })),
+        totalAmount
+      }
+
+      await api.createOrder(orderData)
+      
+      // 메뉴 목록 새로고침 (재고 반영)
+      const updatedMenus = await api.getMenus()
+      setMenus(updatedMenus)
+      
+      showToast('주문이 완료되었습니다!')
+      setCart([])
+      setShowConfirmModal(false)
+    } catch (error) {
+      console.error('주문 실패:', error)
+      showToast(error.message || '주문 처리 중 오류가 발생했습니다.')
     }
-    
-    // 재고 차감
-    setInventory(prev => {
-      const newInventory = [...prev]
-      cart.forEach(cartItem => {
-        const inventoryIndex = newInventory.findIndex(inv => inv.menuId === cartItem.menuId)
-        if (inventoryIndex >= 0) {
-          newInventory[inventoryIndex] = {
-            ...newInventory[inventoryIndex],
-            stock: Math.max(0, newInventory[inventoryIndex].stock - cartItem.quantity)
-          }
-        }
-      })
-      return newInventory
-    })
-    
-    setOrders(prev => [newOrder, ...prev])
-    showToast('주문이 완료되었습니다!')
-    setCart([])
-    setShowConfirmModal(false)
   }, [cart, totalAmount, showToast])
 
-  // 주문 상태 변경
-  const handleStatusChange = useCallback((orderId) => {
+  // 주문 상태 변경 (API 호출)
+  const handleStatusChange = useCallback(async (orderId) => {
+    const order = orders.find(o => o.id === orderId)
+    if (!order) return
+
     const statusFlow = {
       pending: 'accepted',
       accepted: 'preparing',
       preparing: 'completed'
     }
     
-    setOrders(prev => prev.map(order => {
-      if (order.id === orderId && statusFlow[order.status]) {
-        return { ...order, status: statusFlow[order.status] }
-      }
-      return order
-    }))
-  }, [])
+    const nextStatus = statusFlow[order.status]
+    if (!nextStatus) return
 
-  // 재고 증가
-  const increaseStock = useCallback((menuId) => {
-    setInventory(prev => prev.map(item => 
-      item.menuId === menuId ? { ...item, stock: item.stock + 1 } : item
-    ))
-  }, [])
+    try {
+      await api.updateOrderStatus(orderId, nextStatus)
+      
+      // 주문 목록 새로고침
+      await loadOrders()
+    } catch (error) {
+      console.error('상태 변경 실패:', error)
+      showToast('상태 변경 중 오류가 발생했습니다.')
+    }
+  }, [orders, loadOrders, showToast])
 
-  // 재고 감소
-  const decreaseStock = useCallback((menuId) => {
-    setInventory(prev => prev.map(item => 
-      item.menuId === menuId ? { ...item, stock: Math.max(0, item.stock - 1) } : item
-    ))
-  }, [])
+  // 재고 증가 (API 호출)
+  const increaseStock = useCallback(async (menuId) => {
+    const menu = menus.find(m => m.id === menuId)
+    if (!menu) return
+
+    try {
+      await api.updateMenuStock(menuId, menu.stock + 1)
+      
+      // 메뉴 목록 새로고침
+      const updatedMenus = await api.getMenus()
+      setMenus(updatedMenus)
+    } catch (error) {
+      console.error('재고 증가 실패:', error)
+      showToast('재고 수정 중 오류가 발생했습니다.')
+    }
+  }, [menus, showToast])
+
+  // 재고 감소 (API 호출)
+  const decreaseStock = useCallback(async (menuId) => {
+    const menu = menus.find(m => m.id === menuId)
+    if (!menu || menu.stock <= 0) return
+
+    try {
+      await api.updateMenuStock(menuId, menu.stock - 1)
+      
+      // 메뉴 목록 새로고침
+      const updatedMenus = await api.getMenus()
+      setMenus(updatedMenus)
+    } catch (error) {
+      console.error('재고 감소 실패:', error)
+      showToast('재고 수정 중 오류가 발생했습니다.')
+    }
+  }, [menus, showToast])
 
   // 재고 조회 함수
   const getStock = useCallback((menuId) => {
-    const item = inventory.find(inv => inv.menuId === menuId)
-    return item ? item.stock : 0
-  }, [inventory])
+    const menu = menus.find(m => m.id === menuId)
+    return menu ? menu.stock : 0
+  }, [menus])
 
-  // 대시보드 통계
-  const dashboardStats = useMemo(() => ({
-    totalOrders: orders.length,
-    acceptedOrders: orders.filter(o => o.status === 'accepted').length,
-    preparingOrders: orders.filter(o => o.status === 'preparing').length,
-    completedOrders: orders.filter(o => o.status === 'completed').length
-  }), [orders])
+  // 재고 현황 데이터 생성
+  const inventory = useMemo(() => 
+    menus.map(menu => ({
+      menuId: menu.id,
+      menuName: `${menu.name} (${menu.temperature})`,
+      stock: menu.stock
+    }))
+  , [menus])
+
+  // 로딩 중 표시
+  if (loading) {
+    return (
+      <div className="app">
+        <Header currentPage={currentPage} setCurrentPage={setCurrentPage} />
+        <main className="main-container">
+          <div className="loading">데이터를 불러오는 중...</div>
+        </main>
+      </div>
+    )
+  }
 
   return (
     <div className="app">
@@ -226,10 +311,11 @@ function App() {
             <section className="menu-section">
               <h2 className="section-title">메뉴</h2>
               <div className="menu-grid">
-                {menuData.map(menu => (
+                {menus.map(menu => (
                   <MenuCard
                     key={menu.id}
                     menu={menu}
+                    options={options}
                     selectedOptions={selectedOptions}
                     onOptionChange={handleOptionChange}
                     onAddToCart={addToCart}

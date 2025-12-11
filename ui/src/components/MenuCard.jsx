@@ -1,8 +1,16 @@
 import { formatPrice } from '../utils/formatters'
-import { optionsData } from '../constants/menuData'
+
+// 메뉴 이름에 따른 아이콘 매핑
+const menuIcons = {
+  '아메리카노': '☕',
+  '카페라떼': '🥛',
+  '바닐라라떼': '🍦',
+  '카라멜마끼아또': '🍯'
+}
 
 export default function MenuCard({ 
   menu, 
+  options = [],
   selectedOptions, 
   onOptionChange, 
   onAddToCart,
@@ -10,11 +18,12 @@ export default function MenuCard({
 }) {
   const isOutOfStock = stock === 0
   const menuOptions = selectedOptions[menu.id] || []
+  const icon = menuIcons[menu.name] || '☕'
 
   return (
     <div className={`menu-card ${isOutOfStock ? 'out-of-stock' : ''}`}>
       <div className="menu-image">
-        <span className="menu-icon">{menu.icon}</span>
+        <span className="menu-icon">{icon}</span>
         {isOutOfStock && <div className="sold-out-badge">품절</div>}
       </div>
       <div className="menu-content">
@@ -23,7 +32,7 @@ export default function MenuCard({
         <p className="menu-description">{menu.description}</p>
         
         <div className="options-container">
-          {optionsData.map(option => (
+          {options.map(option => (
             <div key={option.id} className="option-item">
               <label>
                 <input
@@ -50,4 +59,3 @@ export default function MenuCard({
     </div>
   )
 }
-

@@ -930,3 +930,13 @@
   background: var(--primary-blue-hover);
   border-color: var(--primary-blue-hover);
 }
+
+/* ===== Loading ===== */
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+  font-size: 1rem;
+  color: var(--text-medium);
+}
