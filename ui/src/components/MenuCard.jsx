@@ -1,6 +1,6 @@
 import { formatPrice } from '../utils/formatters'
 
-// 메뉴 이름에 따른 아이콘 매핑
+// 메뉴 이름에 따른 아이콘 매핑 (이미지가 없을 때 사용)
 const menuIcons = {
   '아메리카노': '☕',
   '카페라떼': '🥛',
@@ -19,11 +19,20 @@ export default function MenuCard({
   const isOutOfStock = stock === 0
   const menuOptions = selectedOptions[menu.id] || []
   const icon = menuIcons[menu.name] || '☕'
+  const hasImage = menu.imageUrl && menu.imageUrl !== null
 
   return (
     <div className={`menu-card ${isOutOfStock ? 'out-of-stock' : ''}`}>
       <div className="menu-image">
-        <span className="menu-icon">{icon}</span>
+        {hasImage ? (
+          <img 
+            src={menu.imageUrl} 
+            alt={`${menu.name} ${menu.temperature}`}
+            className="menu-img"
+          />
+        ) : (
+          <span className="menu-icon">{icon}</span>
+        )}
         {isOutOfStock && <div className="sold-out-badge">품절</div>}
       </div>
       <div className="menu-content">
