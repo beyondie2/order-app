@@ -3,7 +3,7 @@
  * 백엔드 서버와 통신하는 함수들
  */
 
-const API_BASE_URL = 'http://localhost:3000/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
 /**
  * 공통 fetch 함수
