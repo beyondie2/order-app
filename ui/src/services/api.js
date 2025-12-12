@@ -5,11 +5,17 @@
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
+// 디버깅: API URL 출력
+console.log('🔗 API_BASE_URL:', API_BASE_URL);
+console.log('🔗 VITE_API_URL env:', import.meta.env.VITE_API_URL);
+
 /**
  * 공통 fetch 함수
  */
 const fetchAPI = async (endpoint, options = {}) => {
   const url = `${API_BASE_URL}${endpoint}`;
+  
+  console.log('📡 Fetching:', url);
   
   const defaultOptions = {
     headers: {
@@ -17,14 +23,36 @@ const fetchAPI = async (endpoint, options = {}) => {
     },
   };
 
-  const response = await fetch(url, { ...defaultOptions, ...options });
-  const data = await response.json();
+  try {
+    const response = await fetch(url, { ...defaultOptions, ...options });
+    
+    console.log('📡 Response status:', response.status);
+    
+    // 응답이 JSON이 아닐 수 있음
+    const text = await response.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      console.error('📡 Response is not JSON:', text);
+      throw new Error(`서버 응답 오류: ${response.status}`);
+    }
 
-  if (!response.ok) {
-    throw new Error(data.error || '요청 처리 중 오류가 발생했습니다.');
+    if (!response.ok) {
+      throw new Error(data.error || '요청 처리 중 오류가 발생했습니다.');
+    }
+
+    return data;
+  } catch (error) {
+    console.error('📡 Fetch error:', error);
+    
+    // 네트워크 오류인 경우 더 친절한 메시지
+    if (error.name === 'TypeError' && error.message === 'Failed to fetch') {
+      throw new Error('서버에 연결할 수 없습니다. 잠시 후 다시 시도해주세요.');
+    }
+    
+    throw error;
   }
-
-  return data;
 };
 
 // ==================== 메뉴 API ====================
@@ -106,3 +134,5 @@ export const updateOrderStatus = async (id, status) => {
   return result.data;
 };
 
+// API URL 확인용 함수
+export const getApiUrl = () => API_BASE_URL;

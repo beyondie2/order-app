@@ -36,6 +36,7 @@ function App() {
   })
   
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [showConfirmModal, setShowConfirmModal] = useState(false)
 
   // 토스트 메시지 표시
@@ -53,19 +54,28 @@ function App() {
   const loadInitialData = useCallback(async () => {
     try {
       setLoading(true)
+      setError(null)
+      
+      console.log('🔄 데이터 로드 시작...')
+      console.log('🔗 API URL:', api.getApiUrl())
+      
       const [menusData, optionsData] = await Promise.all([
         api.getMenus(),
         api.getOptions()
       ])
+      
+      console.log('✅ 메뉴 데이터:', menusData)
+      console.log('✅ 옵션 데이터:', optionsData)
+      
       setMenus(menusData)
       setOptions(optionsData)
-    } catch (error) {
-      console.error('데이터 로드 실패:', error)
-      showToast('데이터를 불러오는데 실패했습니다.')
+    } catch (err) {
+      console.error('❌ 데이터 로드 실패:', err)
+      setError(err.message || '데이터를 불러오는데 실패했습니다.')
     } finally {
       setLoading(false)
     }
-  }, [showToast])
+  }, [])
 
   // 주문 목록 로드
   const loadOrders = useCallback(async () => {
@@ -73,8 +83,8 @@ function App() {
       const { orders: ordersData, stats } = await api.getOrders()
       setOrders(ordersData)
       setDashboardStats(stats)
-    } catch (error) {
-      console.error('주문 목록 로드 실패:', error)
+    } catch (err) {
+      console.error('주문 목록 로드 실패:', err)
     }
   }, [])
 
@@ -208,9 +218,9 @@ function App() {
       showToast('주문이 완료되었습니다!')
       setCart([])
       setShowConfirmModal(false)
-    } catch (error) {
-      console.error('주문 실패:', error)
-      showToast(error.message || '주문 처리 중 오류가 발생했습니다.')
+    } catch (err) {
+      console.error('주문 실패:', err)
+      showToast(err.message || '주문 처리 중 오류가 발생했습니다.')
     }
   }, [cart, totalAmount, showToast])
 
@@ -233,8 +243,8 @@ function App() {
       
       // 주문 목록 새로고침
       await loadOrders()
-    } catch (error) {
-      console.error('상태 변경 실패:', error)
+    } catch (err) {
+      console.error('상태 변경 실패:', err)
       showToast('상태 변경 중 오류가 발생했습니다.')
     }
   }, [orders, loadOrders, showToast])
@@ -250,8 +260,8 @@ function App() {
       // 메뉴 목록 새로고침
       const updatedMenus = await api.getMenus()
       setMenus(updatedMenus)
-    } catch (error) {
-      console.error('재고 증가 실패:', error)
+    } catch (err) {
+      console.error('재고 증가 실패:', err)
       showToast('재고 수정 중 오류가 발생했습니다.')
     }
   }, [menus, showToast])
@@ -267,8 +277,8 @@ function App() {
       // 메뉴 목록 새로고침
       const updatedMenus = await api.getMenus()
       setMenus(updatedMenus)
-    } catch (error) {
-      console.error('재고 감소 실패:', error)
+    } catch (err) {
+      console.error('재고 감소 실패:', err)
       showToast('재고 수정 중 오류가 발생했습니다.')
     }
   }, [menus, showToast])
@@ -294,7 +304,35 @@ function App() {
       <div className="app">
         <Header currentPage={currentPage} setCurrentPage={setCurrentPage} />
         <main className="main-container">
-          <div className="loading">데이터를 불러오는 중...</div>
+          <div className="loading">
+            <div className="loading-spinner"></div>
+            <p>데이터를 불러오는 중...</p>
+            <p className="loading-hint">서버가 깨어나는 중일 수 있습니다. 잠시만 기다려주세요.</p>
+          </div>
+        </main>
+      </div>
+    )
+  }
+
+  // 오류 발생 시 표시
+  if (error) {
+    return (
+      <div className="app">
+        <Header currentPage={currentPage} setCurrentPage={setCurrentPage} />
+        <main className="main-container">
+          <div className="error-container">
+            <div className="error-icon">⚠️</div>
+            <h2>데이터를 불러올 수 없습니다</h2>
+            <p className="error-message">{error}</p>
+            <p className="error-hint">
+              서버가 슬립 모드에서 깨어나는 중일 수 있습니다.<br />
+              잠시 후 다시 시도해주세요.
+            </p>
+            <button className="retry-btn" onClick={loadInitialData}>
+              다시 시도
+            </button>
+            <p className="error-api-url">API: {api.getApiUrl()}</p>
+          </div>
         </main>
       </div>
     )
