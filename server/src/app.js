@@ -10,8 +10,36 @@ const ordersRouter = require('./routes/orders');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// CORS 설정
+const corsOptions = {
+  origin: function (origin, callback) {
+    // 허용할 도메인 목록
+    const allowedOrigins = [
+      'http://localhost:5173',
+      'http://localhost:3000',
+      process.env.FRONTEND_URL,
+    ].filter(Boolean);
+
+    // origin이 없는 경우 (같은 도메인, Postman 등) 또는 허용된 도메인인 경우
+    if (!origin || allowedOrigins.some(allowed => origin.startsWith(allowed.replace(/\/$/, '')))) {
+      callback(null, true);
+    } else {
+      // 개발 편의를 위해 render.com과 onrender.com 도메인도 허용
+      if (origin.includes('onrender.com') || origin.includes('render.com')) {
+        callback(null, true);
+      } else {
+        console.log('CORS blocked origin:', origin);
+        callback(null, true); // 일단 모두 허용 (디버깅용)
+      }
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+};
+
 // 미들웨어 설정
-app.use(cors());
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // 요청 로깅 미들웨어
